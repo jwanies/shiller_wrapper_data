@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 REQUIRED_FILES = ['ie_data.xls', 'Fig3-1.xls']
 
 RETRY_ATTEMPTS = 3
-RETRY_BACKOFF = [2, 4, 8]  # seconds between attempts
+RETRY_BACKOFF = [2, 4]  # seconds between retry attempts
 
 USER_AGENT = 'Mozilla/5.0 (compatible; shiller-wrapper/1.0; +https://github.com/jwanies/shiller_wrapper_data)'
 
@@ -55,10 +55,10 @@ def scrape_download_urls():
 
     for link in soup.find_all('a', href=True):
         href = link['href']
-        if re.search(r'ie_data', href, re.I) and re.search(r'\.xlsx?', href, re.I):
+        if 'ie_data.xls' not in urls and re.search(r'ie_data', href, re.I) and re.search(r'\.xlsx?', href, re.I):
             urls['ie_data.xls'] = 'https:' + href if href.startswith('//') else href
             print(f"  ✓ Found ie_data.xls URL")
-        elif re.search(r'fig\s*3[-.]1', href, re.I) and re.search(r'\.xlsx?', href, re.I):
+        elif 'Fig3-1.xls' not in urls and re.search(r'fig\s*3[-.]1', href, re.I) and re.search(r'\.xlsx?', href, re.I):
             urls['Fig3-1.xls'] = 'https:' + href if href.startswith('//') else href
             print(f"  ✓ Found Fig3-1.xls URL")
 
@@ -73,7 +73,9 @@ def download_file(url, filename):
     """Download a file from URL to filename."""
     print(f"Downloading {filename} from {url}...")
     try:
-        urllib.request.urlretrieve(url, filename)
+        req = urllib.request.Request(url, headers={'User-Agent': USER_AGENT})
+        with urllib.request.urlopen(req) as resp, open(filename, 'wb') as f:
+            f.write(resp.read())
         print(f"  ✓ Downloaded {filename}")
         return True
     except Exception as e:
