@@ -47,7 +47,6 @@ def scrape_download_urls():
         html = _fetch_page()
     except Exception as e:
         print(f"  ✗ Failed to fetch shillerdata.com after {RETRY_ATTEMPTS} attempts: {e}")
-        print(f"  ⚠ Will fall back to committed copies for all files")
         return {}
 
     soup = BeautifulSoup(html, 'html.parser')
@@ -64,7 +63,7 @@ def scrape_download_urls():
 
     for fname in REQUIRED_FILES:
         if fname not in urls:
-            print(f"  ⚠ {fname} URL not found on page — will keep committed copy if present")
+            print(f"  ✗ {fname} URL not found on page")
 
     return urls
 
@@ -103,29 +102,17 @@ def main():
         old_hash = get_file_hash(filename)
         url = data_files.get(filename)
 
-        if url:
-            if download_file(url, filename):
-                new_hash = get_file_hash(filename)
-                if old_hash != new_hash:
-                    if old_hash is None:
-                        changes.append(f"Added {filename}")
-                    else:
-                        changes.append(f"Updated {filename}")
-                    print(f"  File changed: {filename}")
-                else:
-                    print(f"  No changes to {filename}")
-            else:
-                if old_hash is not None:
-                    print(f"  ⚠ Download failed for {filename}, keeping committed copy")
-                else:
-                    print(f"  ✗ Download failed for {filename} and no committed copy exists")
-                    hard_failure = True
+        # Fail rather than redeploy the committed copy, which is stale and would overwrite the live site.
+        if not url or not download_file(url, filename):
+            print(f"  ✗ Could not fetch a fresh {filename}")
+            hard_failure = True
+            continue
+        new_hash = get_file_hash(filename)
+        if old_hash != new_hash:
+            changes.append(f"{'Added' if old_hash is None else 'Updated'} {filename}")
+            print(f"  File changed: {filename}")
         else:
-            if old_hash is not None:
-                print(f"  ⚠ Keeping committed copy of {filename}")
-            else:
-                print(f"  ✗ Cannot scrape {filename} URL and no committed copy exists")
-                hard_failure = True
+            print(f"  No changes to {filename}")
 
     if changes:
         print(f"\n{len(changes)} file(s) changed:")
@@ -135,7 +122,7 @@ def main():
         print("\nNo changes detected in data files")
 
     if hard_failure:
-        print("\n✗ Required data unavailable — cannot deploy")
+        print("\n✗ Fresh data unavailable — not deploying, the live site keeps its last good build")
         return 1
 
     return 0
